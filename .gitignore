@@ -1,0 +1,22 @@
+# сборка
+build*/
+
+# результаты рендера (генерируются программой)
+/*.png
+/renders/
+
+# macOS
+.DS_Store
+
+# clangd: индекс и кэш
+.cache/
+
+# редакторы
+.vscode/
+.idea/
+*.swp
+*~
+# материалы курса
+Lecture_4_rasterization.pdf
+rasterizer_base_task.md
+/screenshots/
