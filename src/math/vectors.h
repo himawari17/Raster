@@ -91,6 +91,10 @@ static inline vec3 cross3(vec3 a, vec3 b) {
                a.x * b.y - a.y * b.x);
 }
 
+static inline vec3 mul3(vec3 a, vec3 b) {
+  return make3(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+
 static inline vec3 scale3(vec3 a, float c) {
   return make3(a.x * c, a.y * c, a.z * c);
 }

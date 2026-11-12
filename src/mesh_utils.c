@@ -233,3 +233,28 @@ mat4 normalize_mesh(const mesh* m) {
   return mat4_mul(mat4_make_scale(make3(s, s, s)),
                   mat4_make_translate(scale3(c, -1.0f)));
 }
+
+void compute_normals(mesh* m) {
+  free(m->normals);
+  m->normals = calloc(m->num_vertices, sizeof(vec3));
+
+  for (int t = 0; t < m->num_triangles; t++) {
+    int i0 = m->indices[3 * t + 0];
+    int i1 = m->indices[3 * t + 1];
+    int i2 = m->indices[3 * t + 2];
+    vec3 e1 = sub3(m->verts[i1], m->verts[i0]);
+    vec3 e2 = sub3(m->verts[i2], m->verts[i0]);
+    vec3 fn = cross3(e1, e2);
+
+    m->normals[i0] = add3(m->normals[i0], fn);
+    m->normals[i1] = add3(m->normals[i1], fn);
+    m->normals[i2] = add3(m->normals[i2], fn);
+  }
+
+  for (int i = 0; i < m->num_vertices; i++) {
+    vec3 n = normalize3(m->normals[i]);
+    if (n.x == 0.0f && n.y == 0.0f && n.z == 0.0f)
+      n = make3(0.0f, 1.0f, 0.0f);
+    m->normals[i] = n;
+  }
+}

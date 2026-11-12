@@ -9,6 +9,15 @@ static void ensure_clip_capacity(RContext* rc, int n) {
   rc->clip = malloc(sizeof(vec4) * n);
   rc->clip_cap = n;
 }
+
+static void ensure_norm_capacity(RContext* rc, int n) {
+  if (n <= rc->norm_cap) {
+    return;
+  }
+  free(rc->norms);
+  rc->norms = malloc(sizeof(vec3) * n);
+  rc->norm_cap = n;
+}
 static vec3 debug_color(int t) {
   unsigned h = (unsigned)t * 2654435761u;
   return make3(((h >> 0) & 255) / 255.0f,
@@ -27,6 +36,10 @@ int ContextInit(RContext* rc, FrameBuffer* fb) {
   rc->clip = NULL;
   rc->clip_cap = 0;
   rc->clip_back = 1;
+  rc->norms = NULL;
+  rc->norm_cap = 0;
+  rc->uniforms = NULL;
+  rc->shader = NULL;
   return EXIT_SUCCESS;
 }
 
@@ -42,9 +55,14 @@ void ContextDrawMesh(RContext* rc, const mesh* mesh, mat4 model) {
   float H = rc->fb->h;
   mat4 mvp = mat4_mul(rc->vp, model);
   ensure_clip_capacity(rc, mesh->num_vertices);
-  /* vert shader */
+  ensure_norm_capacity(rc, mesh->num_vertices);
+  mat3 nmat = mat3_normal_matrix(model);
+  /* Vertex shader */
   for (size_t i = 0; i < mesh->num_vertices; i++) {
     rc->clip[i] = mat4_mul_vec4(mvp, point(mesh->verts[i]));
+    if (mesh->normals) {
+      rc->norms[i] = normalize3(mat3_mul_vec3(nmat, mesh->normals[i]));
+    }
   }
 
   for (int t = 0; t < mesh->num_triangles; t++) {
@@ -70,14 +88,30 @@ void ContextDrawMesh(RContext* rc, const mesh* mesh, mat4 model) {
                  (s[1].y - s[0].y) * (s[2].x - s[0].x);
     if (rc->clip_back && area <= 0.0f)
       continue;
-    /* frag? */
-    vec3 col = debug_color(t);
-    draw_triangle(rc->fb, s[0], s[1], s[2], col, col, col);
+
+    int use_shader = rc->shader != NULL && mesh->normals != NULL;
+    if (use_shader) {
+      Varyings v[3] = {0};
+      for (int k = 0; k < 3; k++)
+        v[k].normals = rc->norms[mesh->indices[3 * t + k]];
+      draw_triangle_shaded(rc->fb, s[0], s[1], s[2], v, rc->shader, rc->uniforms);
+    } else {
+      vec3 col = debug_color(t);
+      draw_triangle(rc->fb, s[0], s[1], s[2], col, col, col);
+    }
   }
 }
 int ContextFree(RContext* rc) {
   free(rc->clip);
+  free(rc->norms);
   rc->clip = NULL;
   rc->clip_cap = 0;
+  rc->norms = NULL;
+  rc->norm_cap = 0;
   return EXIT_SUCCESS;
+}
+
+void ContextUseShader(RContext* rc, FragShader shader, const void* uniforms) {
+  rc->shader = shader;
+  rc->uniforms = uniforms;
 }

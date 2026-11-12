@@ -38,4 +38,7 @@ mat4 mat4_rotate_z(float a);
 mat4 look_at(vec3 eye, vec3 target, vec3 up);
 mat4 perspective(float fovy, float aspect, float near, float far);
 
+/* Create normal matrix */
+mat3 mat3_normal_matrix(mat4 model);
+
 #endif

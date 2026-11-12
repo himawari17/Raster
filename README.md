@@ -1,20 +1,3 @@
-## Состав
-
-```
-CMakeLists.txt
-external/            сторонние библиотеки (header-only)
-  stb_image.h          чтение PNG/JPG/...
-  stb_image_write.h    запись PNG
-  tinyobj_loader_c.h   парсер .obj
-resources/           тестовые модели и текстуры 
-src/
-  vectors.h            типы vec2, vec3 (минимум, нужный утилитам)
-  image_utils.h/.c     load_image_f32_rgb, save_image_f32_png_rgb
-  mesh_utils.h/.c      load_obj, free_mesh
-  main_cli.c           пример без окна: меш + картинка -> PNG
-  main_app.c           пример с окном: вывод массива пикселей в реальном времени
-```
-
 ## Сборка под Linux
 
 Шаблон написан на C (C11). Нужны компилятор (gcc или clang), CMake не ниже
@@ -59,13 +42,22 @@ cmake --build build -j --config Release
 ### main_cli
 
 ```bash
-./build/main_cli [mesh.obj] [texture.png|jpg] [output.png]
+./build/main_cli [mesh.obj]
 ```
 
-Загружает меш (по умолчанию `resources/Bunny.obj`), печатает число вершин и
-треугольников, затем загружает картинку (по умолчанию
-`resources/textures/porcelain.jpg`) и сохраняет её с переставленными красным
-и синим каналами (по умолчанию в `swapped_rb.png`).
+Без аргумента берётся `resources/Bunny.obj`. За один запуск сохраняет по
+картинке на каждый пункт задания (в текущую папку):
+
+| Файл | Пункт | Содержимое |
+|---|---|---|
+| `triangle.png` | 1 | 2D-треугольник, вершинные цвета красный/зелёный/синий |
+| `projection.png` | 2 | модель через матрицы M, V, P; случайный цвет на треугольник |
+| `depth.png` | 3 | визуализация буфера глубины (z-буфер того же прохода, что и `projection.png`) |
+| `normals.png` | 4 | отладка: мировая нормаль как цвет, `n * 0.5 + 0.5` |
+| `lambert.png` | 4 | освещение по Ламберту, сохраняется с гаммой 2.2 |
+
+Если в `.obj` нет нормалей (например, `cornell_box.obj`), они пересчитываются
+при загрузке, в консоль печатается `no normals in file -> computing`.
 
 ### main_app
 
@@ -135,7 +127,8 @@ RGBA8 цветом, который плавно меняется со време
 
 Текстуры лежат в `resources/textures`, грани скайбокса - в
 `resources/textures/skybox`.
-## Соглашения
+
+## Соглашения конвейера
 
 | Вопрос | Выбор |
 |---|---|
@@ -149,6 +142,17 @@ RGBA8 цветом, который плавно меняется со време
 | Пиксель (i, j) | квадрат [i, i+1) × [j, j+1), центр в (i + 0.5, j + 0.5) |
 | Углы | в радианах |
 | Точки / направления | w = 1 / w = 0 (`point()` / `dir()`) |
+| Буфер глубины | хранит `z_ndc`; ближе = меньше; тест `z < Z[x,y]`; очистка значением `1.0` (`FB_DEPTH_CLEAR`) |
+| Интерполяция глубины | `z_ndc` линейна в экранных координатах → обычные барицентрические веса, без перспективной коррекции |
+| Лицевые грани | обход против часовой стрелки на экране (`area > 0`); задние (`area <= 0`) отбрасываются до растеризации, флаг `clip_back` |
+| Нормализация модели | матрицей `N = S(s)·T(−c)`, стоит справа в матрице модели: `model = T·R·S_user·N`; центр AABB → 0, наибольший габарит → 1 |
+| Порядок поворотов | `R = Rx(pitch)·Ry(yaw)`: сначала поворот вокруг вертикали, потом наклон |
+| Пространство освещения | мировое: нормали, направление света — всё в мировых координатах |
+| Матрица нормалей | `N = (M⁻¹)ᵀ`, блок 3×3 (`mat3_normal_matrix`); после умножения нормаль нормируется |
+| Направление света | задаётся как направление лучей `sun_dir` (от солнца); в шейдер идёт `l = normalize(−sun_dir)` — вектор НА источник |
+| Пересчёт нормалей | сумма ненормированных `cross(v1−v0, v2−v0)` по смежным граням (вес = площадь), затем нормировка; обход CCW → нормаль наружу |
+| Интерполяция атрибутов | барицентрические веса экранного пространства (перспективная коррекция — пункт 5) |
+| Гамма | освещение считается в линейном пространстве; `FB_SavePng(..., gamma)`: 2.2 для освещённых кадров, 1.0 для отладочных |
 
 Viewport: `xs = (x_ndc + 1) / 2 * W`, `ys = (y_ndc + 1) / 2 * H`.
 
@@ -156,18 +160,55 @@ Viewport: `xs = (x_ndc + 1) / 2 * W`, `ys = (y_ndc + 1) / 2 * H`.
 `w_clip < near` (near = 0.01). Края экрана не отсекаются: bounding box
 треугольника обрезается по кадру.
 
+Видимость: z-буфер (`float` на пиксель) очищается вместе с цветом в `FB_Clear`.
+Фрагмент записывается, только если его `z_ndc` меньше лежащего в буфере;
+тест делается до вычисления цвета. Очистка значением `1.0` заодно отсекает
+всё дальше дальней плоскости. near = 0.01, far = 10: меньший near ухудшает
+точность глубины (z-fighting).
+
+Визуализация глубины (`FB_SaveDepth`): `z_ndc` переводится в линейную глубину
+`d = 2fn / ((f+n) − z_ndc(f−n))`, затем растягивается по фактическому
+диапазону кадра [d_min, d_max] (фон исключён) в яркость [0.15, 1].
+Ближе — темнее, фон — чёрный.
+
+## Шейдеры
+
+Растеризатор не знает формулы цвета — он интерполирует атрибуты вершин и
+вызывает пиксельный шейдер по указателю (по аналогии с OpenGL).
+
+| Понятие | В коде | Аналог в OpenGL |
+|---|---|---|
+| атрибуты вершины, интерполируемые по треугольнику | `Varyings` (`normals`, `color`, `uv`) | `out` / `in` переменные |
+| пиксельный шейдер | `typedef vec3 (*FragShader)(const Varyings*, const void* uniforms)` | fragment shader |
+| параметры, общие для вызова отрисовки | структура (`LambertUniforms`), передаётся как `const void*` | `uniform` |
+| выбор текущего шейдера | `ContextUseShader(rc, shader, uniforms)` | `glUseProgram` + `glUniform*` |
+| отрисовка | `ContextDrawMesh` → `draw_triangle_shaded` | `glDrawElements` |
+
+Шейдеры: `fs_lambert`, `fs_normals` (`render/shader.c`). Если шейдер не
+задан (`NULL`), треугольники красятся отладочным цветом.
+
+`draw_triangle` (пункт 1) — обёртка над `draw_triangle_shaded`: вершинные
+цвета кладутся в `Varyings.color`, используется внутренний шейдер
+`fs_vertex_color`. 
+
+Важно: `ContextUseShader` хранит указатель на uniforms, а не копию —
+структура должна существовать до конца `ContextDrawMesh`.
+
 ## Структура
 
 ```
-src/math/vectors.h      vec2/3/4, dot, cross, normalize, point/dir
-src/math/mat.h/.c       mat3/mat4: умножение, транспонирование, обращение
-                        (Гаусс-Жордан с выбором главного элемента),
-                        translate/scale/rotate, look_at, perspective
-src/render/framebuffer  кадровый буфер float RGB
-src/render/raster       растеризация треугольника: bounding box + функции ребра,
-                        барицентрическая интерполяция
-src/render/context      контекст рендера: камера (V, P, VP раз за кадр),
-                        вершинный этап, деление на w, viewport
-src/test_math.c         модульные тесты математики
-src/main_cli.c          рендер модели в PNG
+src/math/vectors.h        vec2/3/4, dot, cross, normalize, point/dir
+src/math/mat.h/.c         mat3/mat4, обращение (Гаусс-Жордан), translate/scale/rotate,
+                          look_at, perspective, mat3_normal_matrix ((M⁻¹)ᵀ)
+src/math/math_utils.h     min3f/max3f, clampi, PI, deg2rad
+src/mesh_utils.h/.c       load_obj, normalize_mesh, compute_normals
+src/render/framebuffer    цвет float RGB + z-буфер; FB_SavePng(gamma), FB_SaveDepth
+src/render/shader_utils.h интерфейс растеризатор↔шейдер: Varyings, FragShader
+src/render/shader.h/.c    конкретные шейдеры: fs_lambert, fs_normals, LambertUniforms
+src/render/raster         draw_triangle_shaded (bbox, функции ребра, тест глубины,
+                          интерполяция, вызов шейдера); draw_triangle — обёртка
+src/render/context        камера (V, P, VP), вершинный этап (позиции + мировые нормали),
+                          деление на w, viewport, отсечение задних граней, ContextUseShader
+src/tests_ai/test_math.c  модульные тесты математики
+src/main_cli.c            рендер картинок для пунктов 1–4
 ```

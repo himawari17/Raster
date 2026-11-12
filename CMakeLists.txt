@@ -23,6 +23,10 @@ else()
     endif()
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT MSVC)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 # --- утилиты шаблона: загрузка .obj и картинок ----------------------------
 # Сюда же можно добавлять свои файлы (математика, растеризатор, ...)
@@ -33,6 +37,7 @@ add_library(raster_utils STATIC
 	src/render/framebuffer.c
 	src/render/context.c
 	src/math/mat.c
+	src/render/shader.c
 )
 target_include_directories(raster_utils PUBLIC src ${CMAKE_CURRENT_SOURCE_DIR})
 if(NOT MSVC)

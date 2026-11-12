@@ -22,6 +22,8 @@ void free_mesh(mesh* m);
 // При ошибке возвращает пустой меш (num_vertices = num_triangles = 0)
 mesh load_obj(const char* filename);
 
-/* Normalize model mesh */
+/* Normalize model mesh. Fit it in 1x1 box*/
 mat4 normalize_mesh(const mesh* m);
+
+void compute_normals(mesh* m);
 #endif

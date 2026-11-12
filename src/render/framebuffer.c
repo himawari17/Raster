@@ -32,8 +32,8 @@ void FB_DrawPixel(FrameBuffer* fb, int x, int y, vec3 c) {
   pixel[2] = c.z;
 }
 
-int FB_SavePng(FrameBuffer* fb, const char* out_name) {
-  return save_image_f32_png_rgb(fb->c, out_name, fb->w, fb->h, 3, 1.0f);
+int FB_SavePng(FrameBuffer* fb, const char* out_name, float gamma) {
+  return save_image_f32_png_rgb(fb->c, out_name, fb->w, fb->h, 3, gamma);
 }
 
 void FB_Free(FrameBuffer* fb) {

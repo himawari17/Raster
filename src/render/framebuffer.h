@@ -22,7 +22,7 @@ void FB_Clear(FrameBuffer* fb, vec3 c);
 void FB_DrawPixel(FrameBuffer* fb, int x, int y, vec3 c);
 
 /* Saves current FrameBuffer state in a PNG file */
-int FB_SavePng(FrameBuffer* fb, const char* out_name);
+int FB_SavePng(FrameBuffer* fb, const char* out_name, float gamma);
 
 /* Save depth-buffer footprint */
 int FB_SaveDepth(FrameBuffer* fb, const char* out, float f, float n);

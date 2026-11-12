@@ -191,3 +191,11 @@ mat4 perspective(float fovy, float aspect, float near, float far) {
   out.m[3][2] = -1.0f;
   return out;
 }
+
+mat3 mat3_normal_matrix(mat4 model) {
+  mat4 inv;
+  if (!mat4_inverse(model, &inv)) {
+    return mat3_from_mat4(model);
+  }
+  return mat3_from_mat4(mat4_transpose(inv));
+}
