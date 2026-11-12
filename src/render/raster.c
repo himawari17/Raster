@@ -2,21 +2,21 @@
 #include "../math/math_utils.h"
 #include <stdlib.h>
 
-static inline float edge(vec2 a, vec2 b, vec2 p) {
-  return cross2(sub2(b, a), sub2(p, a));
+static inline float edge(vec3 a, vec3 b, vec2 p) {
+  return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
 }
 
 /* Checks if the triangle is out of screen */
-static inline int is_on_screen(FrameBuffer* fb, vec2 p0, vec2 p1, vec2 p2,
+static inline int is_on_screen(FrameBuffer* fb, vec3 p0, vec3 p1, vec3 p2,
                                float minx, float miny, float maxx, float maxy) {
   if (maxx < 0 || maxy < 0 || minx > fb->w || miny > fb->h)
     return 0;
   return 1;
 }
 
-void draw_triangle(FrameBuffer* fb, vec2 p0, vec2 p1, vec2 p2,
+void draw_triangle(FrameBuffer* fb, vec3 p0, vec3 p1, vec3 p2,
                    vec3 c0, vec3 c1, vec3 c2) {
-  float S = edge(p0, p1, p2);
+  float S = edge(p0, p1, make2(p2.x, p2.y));
   if (fabsf(S) < 1e-8f)
     return;
 
@@ -43,6 +43,14 @@ void draw_triangle(FrameBuffer* fb, vec2 p0, vec2 p1, vec2 p2,
       if (e0 < 0.0 || e1 < 0.0 || e2 < 0.0) {
         continue;
       }
+
+      /* test depth */
+      float z = e0 * p0.z + e1 * p1.z + e2 * p2.z;
+      int idx = y * fb->w + x;
+      if (z >= fb->z[idx]) {
+        continue;
+      }
+      fb->z[idx] = z;
       const vec3 color = add3(add3(scale3(c0, e0), scale3(c1, e1)), scale3(c2, e2));
       FB_DrawPixel(fb, x, y, color);
     }

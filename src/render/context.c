@@ -26,6 +26,7 @@ int ContextInit(RContext* rc, FrameBuffer* fb) {
   rc->vp = mat4_make();
   rc->clip = NULL;
   rc->clip_cap = 0;
+  rc->clip_back = 1;
   return EXIT_SUCCESS;
 }
 
@@ -52,17 +53,23 @@ void ContextDrawMesh(RContext* rc, const mesh* mesh, mat4 model) {
       c[k] = rc->clip[mesh->indices[3 * t + k]];
     if (c[0].w < rc->near || c[1].w < rc->near || c[2].w < rc->near)
       continue;
-    vec2 s[3];
+    vec3 s[3];
     float z_ndc[3], inv_w[3];
     for (int k = 0; k < 3; k++) {
       float iw = 1.0f / c[k].w;
       s[k].x = (c[k].x * iw + 1.0f) * 0.5f * W;
       s[k].y = (c[k].y * iw + 1.0f) * 0.5f * H;
       z_ndc[k] = c[k].z * iw;
+      s[k].z = z_ndc[k];
       inv_w[k] = iw;
     }
-    (void)z_ndc;
     (void)inv_w;
+
+    /* back face culling */
+    float area = (s[1].x - s[0].x) * (s[2].y - s[0].y) -
+                 (s[1].y - s[0].y) * (s[2].x - s[0].x);
+    if (rc->clip_back && area <= 0.0f)
+      continue;
     /* frag? */
     vec3 col = debug_color(t);
     draw_triangle(rc->fb, s[0], s[1], s[2], col, col, col);

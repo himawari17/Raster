@@ -3,10 +3,10 @@
 #define TINYOBJ_LOADER_C_IMPLEMENTATION
 #include "external/tinyobj_loader_c.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 #ifdef _WIN64
 #define atoll(S) _atoi64(S)
 #include <windows.h>
@@ -18,12 +18,11 @@
 #include <unistd.h>
 #endif
 
-void free_mesh(mesh *m)
-{
-    free(m->verts);
-    free(m->normals);
-    free(m->tcs);
-    free(m->indices);
+void free_mesh(mesh* m) {
+  free(m->verts);
+  free(m->normals);
+  free(m->tcs);
+  free(m->indices);
 }
 
 static char* mmap_file(size_t* len, const char* filename) {
@@ -89,8 +88,7 @@ static char* mmap_file(size_t* len, const char* filename) {
 }
 
 static void get_file_data(void* ctx, const char* filename, const int is_mtl,
-                          const char* obj_filename, char** data, size_t* len) 
-                          {
+                          const char* obj_filename, char** data, size_t* len) {
   // NOTE: If you allocate the buffer with malloc(),
   // You can define your own memory management struct and pass it through `ctx`
   // to store the pointer and free memories at clean up stage(when you quit an
@@ -113,117 +111,125 @@ static void get_file_data(void* ctx, const char* filename, const int is_mtl,
 
 typedef struct
 {
-    int v_idx, vt_idx, vn_idx;
-    int id; // -1 - empty
+  int v_idx, vt_idx, vn_idx;
+  int id; // -1 - empty
 } vertex_slot;
 
-static uint32_t hash_vertex(int v_idx, int vt_idx, int vn_idx)
-{
-    uint32_t h = (uint32_t)v_idx * 73856093u;
-    h ^= (uint32_t)vt_idx * 19349663u;
-    h ^= (uint32_t)vn_idx * 83492791u;
-    return h;
+static uint32_t hash_vertex(int v_idx, int vt_idx, int vn_idx) {
+  uint32_t h = (uint32_t)v_idx * 73856093u;
+  h ^= (uint32_t)vt_idx * 19349663u;
+  h ^= (uint32_t)vn_idx * 83492791u;
+  return h;
 }
 
-static int valid_index(int idx, unsigned int count)
-{
-    return idx >= 0 && (unsigned int)idx < count;
+static int valid_index(int idx, unsigned int count) {
+  return idx >= 0 && (unsigned int)idx < count;
 }
 
-mesh load_obj(const char *filename)
-{
-    mesh m;
-    m.num_triangles = 0;
-    m.num_vertices = 0;
-    m.verts = NULL;
-    m.normals = NULL;
-    m.tcs = NULL;
-    m.indices = NULL;
+mesh load_obj(const char* filename) {
+  mesh m;
+  m.num_triangles = 0;
+  m.num_vertices = 0;
+  m.verts = NULL;
+  m.normals = NULL;
+  m.tcs = NULL;
+  m.indices = NULL;
 
-    tinyobj_attrib_t attrib;
-    tinyobj_shape_t *shapes = NULL;
-    size_t num_shapes;
-    tinyobj_material_t *materials = NULL;
-    size_t num_materials;
+  tinyobj_attrib_t attrib;
+  tinyobj_shape_t* shapes = NULL;
+  size_t num_shapes;
+  tinyobj_material_t* materials = NULL;
+  size_t num_materials;
 
-    unsigned int flags = TINYOBJ_FLAG_TRIANGULATE;
-    int ret =
-        tinyobj_parse_obj(&attrib, &shapes, &num_shapes, &materials,
-                          &num_materials, filename, get_file_data, NULL, flags);
-    if (ret != TINYOBJ_SUCCESS)
-        return m;
-
-    const int num_corners = attrib.num_faces;
-
-    int has_normals = attrib.num_normals > 0;
-    int has_tcs = attrib.num_texcoords > 0;
-    int valid = num_corners % 3 == 0;
-    for (int i = 0; i < num_corners && valid; i++)
-    {
-        valid = valid_index(attrib.faces[i].v_idx, attrib.num_vertices);
-        has_normals = has_normals && valid_index(attrib.faces[i].vn_idx, attrib.num_normals);
-        has_tcs = has_tcs && valid_index(attrib.faces[i].vt_idx, attrib.num_texcoords);
-    }
-
-    if (valid)
-    {
-        m.verts = malloc(num_corners * sizeof(vec3));
-        m.normals = has_normals ? malloc(num_corners * sizeof(vec3)) : NULL;
-        m.tcs = has_tcs ? malloc(num_corners * sizeof(vec2)) : NULL;
-        m.indices = malloc(num_corners * sizeof(int));
-        m.num_triangles = num_corners/3;
-
-        uint32_t table_size = 1;
-        while (table_size < 2 * (uint32_t)num_corners)
-            table_size *= 2;
-        vertex_slot *table = malloc(table_size * sizeof(vertex_slot));
-        for (uint32_t i = 0; i < table_size; i++)
-            table[i].id = -1;
-
-        for (int i = 0; i < num_corners; i++)
-        {
-            const int v_idx = attrib.faces[i].v_idx;
-            const int vt_idx = has_tcs ? attrib.faces[i].vt_idx : -1;
-            const int vn_idx = has_normals ? attrib.faces[i].vn_idx : -1;
-
-            uint32_t slot = hash_vertex(v_idx, vt_idx, vn_idx) & (table_size - 1);
-            while (table[slot].id >= 0 &&
-                   !(table[slot].v_idx == v_idx && table[slot].vt_idx == vt_idx && table[slot].vn_idx == vn_idx))
-                slot = (slot + 1) & (table_size - 1);
-
-            if (table[slot].id < 0)
-            {
-                const int id = m.num_vertices++;
-                table[slot].v_idx = v_idx;
-                table[slot].vt_idx = vt_idx;
-                table[slot].vn_idx = vn_idx;
-                table[slot].id = id;
-
-                m.verts[id] = make3(attrib.vertices[3 * v_idx + 0], attrib.vertices[3 * v_idx + 1], attrib.vertices[3 * v_idx + 2]);
-                if (has_normals)
-                    m.normals[id] = make3(attrib.normals[3 * vn_idx + 0], attrib.normals[3 * vn_idx + 1], attrib.normals[3 * vn_idx + 2]);
-                if (has_tcs)
-                    m.tcs[id] = make2(attrib.texcoords[2 * vt_idx + 0], attrib.texcoords[2 * vt_idx + 1]);
-            }
-
-            m.indices[i] = table[slot].id;
-        }
-
-        free(table);
-
-        m.verts = realloc(m.verts, m.num_vertices * sizeof(vec3));
-        if (m.normals)
-            m.normals = realloc(m.normals, m.num_vertices * sizeof(vec3));
-        if (m.tcs)
-            m.tcs = realloc(m.tcs, m.num_vertices * sizeof(vec2));
-    }
-    else
-    {
-        fprintf(stderr, "load_obj: %s has invalid face indices\n", filename);
-    }
-
-    tinyobj_attrib_free(&attrib);
-    tinyobj_shapes_free(shapes, num_shapes);
-    tinyobj_materials_free(materials, num_materials);
+  unsigned int flags = TINYOBJ_FLAG_TRIANGULATE;
+  int ret =
+      tinyobj_parse_obj(&attrib, &shapes, &num_shapes, &materials,
+                        &num_materials, filename, get_file_data, NULL, flags);
+  if (ret != TINYOBJ_SUCCESS)
     return m;
+
+  const int num_corners = attrib.num_faces;
+
+  int has_normals = attrib.num_normals > 0;
+  int has_tcs = attrib.num_texcoords > 0;
+  int valid = num_corners % 3 == 0;
+  for (int i = 0; i < num_corners && valid; i++) {
+    valid = valid_index(attrib.faces[i].v_idx, attrib.num_vertices);
+    has_normals = has_normals && valid_index(attrib.faces[i].vn_idx, attrib.num_normals);
+    has_tcs = has_tcs && valid_index(attrib.faces[i].vt_idx, attrib.num_texcoords);
+  }
+
+  if (valid) {
+    m.verts = malloc(num_corners * sizeof(vec3));
+    m.normals = has_normals ? malloc(num_corners * sizeof(vec3)) : NULL;
+    m.tcs = has_tcs ? malloc(num_corners * sizeof(vec2)) : NULL;
+    m.indices = malloc(num_corners * sizeof(int));
+    m.num_triangles = num_corners / 3;
+
+    uint32_t table_size = 1;
+    while (table_size < 2 * (uint32_t)num_corners)
+      table_size *= 2;
+    vertex_slot* table = malloc(table_size * sizeof(vertex_slot));
+    for (uint32_t i = 0; i < table_size; i++)
+      table[i].id = -1;
+
+    for (int i = 0; i < num_corners; i++) {
+      const int v_idx = attrib.faces[i].v_idx;
+      const int vt_idx = has_tcs ? attrib.faces[i].vt_idx : -1;
+      const int vn_idx = has_normals ? attrib.faces[i].vn_idx : -1;
+
+      uint32_t slot = hash_vertex(v_idx, vt_idx, vn_idx) & (table_size - 1);
+      while (table[slot].id >= 0 &&
+             !(table[slot].v_idx == v_idx && table[slot].vt_idx == vt_idx && table[slot].vn_idx == vn_idx))
+        slot = (slot + 1) & (table_size - 1);
+
+      if (table[slot].id < 0) {
+        const int id = m.num_vertices++;
+        table[slot].v_idx = v_idx;
+        table[slot].vt_idx = vt_idx;
+        table[slot].vn_idx = vn_idx;
+        table[slot].id = id;
+
+        m.verts[id] = make3(attrib.vertices[3 * v_idx + 0], attrib.vertices[3 * v_idx + 1], attrib.vertices[3 * v_idx + 2]);
+        if (has_normals)
+          m.normals[id] = make3(attrib.normals[3 * vn_idx + 0], attrib.normals[3 * vn_idx + 1], attrib.normals[3 * vn_idx + 2]);
+        if (has_tcs)
+          m.tcs[id] = make2(attrib.texcoords[2 * vt_idx + 0], attrib.texcoords[2 * vt_idx + 1]);
+      }
+
+      m.indices[i] = table[slot].id;
+    }
+
+    free(table);
+
+    m.verts = realloc(m.verts, m.num_vertices * sizeof(vec3));
+    if (m.normals)
+      m.normals = realloc(m.normals, m.num_vertices * sizeof(vec3));
+    if (m.tcs)
+      m.tcs = realloc(m.tcs, m.num_vertices * sizeof(vec2));
+  } else {
+    fprintf(stderr, "load_obj: %s has invalid face indices\n", filename);
+  }
+
+  tinyobj_attrib_free(&attrib);
+  tinyobj_shapes_free(shapes, num_shapes);
+  tinyobj_materials_free(materials, num_materials);
+  return m;
+}
+
+mat4 normalize_mesh(const mesh* m) {
+  vec3 mn = m->verts[0];
+  vec3 mx = m->verts[0];
+  for (int i = 1; i < m->num_vertices; i++) {
+    vec3 p = m->verts[i];
+    mn = make3(fminf(mn.x, p.x), fminf(mn.y, p.y), fminf(mn.z, p.z));
+    mx = make3(fmaxf(mx.x, p.x), fmaxf(mx.y, p.y), fmaxf(mx.z, p.z));
+  }
+  vec3 c = scale3(add3(mn, mx), 0.5f);
+  vec3 size = sub3(mx, mn);
+  float ext = fmaxf(size.x, fmaxf(size.y, size.z));
+  float s = ext > 1e-12f ? 1.0f / ext : 1.0f;
+
+  return mat4_mul(mat4_make_scale(make3(s, s, s)),
+                  mat4_make_translate(scale3(c, -1.0f)));
 }

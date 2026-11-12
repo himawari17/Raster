@@ -13,6 +13,7 @@ typedef struct {
   float near;
   vec4* clip;
   int clip_cap;
+  int clip_back;
 } RContext;
 
 int ContextInit(RContext* rc, FrameBuffer* fb);

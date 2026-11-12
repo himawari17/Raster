@@ -1,5 +1,6 @@
 #ifndef MESH_UTILS_H
 #define MESH_UTILS_H
+#include "math/mat.h"
 #include "math/vectors.h"
 
 // Треугольный меш. Все атрибуты индексируются одним индексом вершины:
@@ -21,4 +22,6 @@ void free_mesh(mesh* m);
 // При ошибке возвращает пустой меш (num_vertices = num_triangles = 0)
 mesh load_obj(const char* filename);
 
+/* Normalize model mesh */
+mat4 normalize_mesh(const mesh* m);
 #endif
