@@ -81,7 +81,7 @@ void ContextDrawMesh(RContext* rc, const mesh* mesh, mat4 model) {
       s[k].z = z_ndc[k];
       inv_w[k] = iw;
     }
-    (void)inv_w;
+    inv_w[0] = inv_w[1] = inv_w[2] = 1.0f;
 
     /* back face culling */
     float area = (s[1].x - s[0].x) * (s[2].y - s[0].y) -
@@ -92,9 +92,16 @@ void ContextDrawMesh(RContext* rc, const mesh* mesh, mat4 model) {
     int use_shader = rc->shader != NULL && mesh->normals != NULL;
     if (use_shader) {
       Varyings v[3] = {0};
-      for (int k = 0; k < 3; k++)
+      for (int k = 0; k < 3; k++) {
+        int idx = mesh->indices[3 * t + k];
         v[k].normals = rc->norms[mesh->indices[3 * t + k]];
-      draw_triangle_shaded(rc->fb, s[0], s[1], s[2], v, rc->shader, rc->uniforms);
+        if (mesh->tcs) {
+          v[k].uv = mesh->tcs[idx];
+        } else {
+          v[k].uv = make2(0.0f, 0.0f);
+        }
+      }
+      draw_triangle_shaded(rc->fb, s[0], s[1], s[2], inv_w, v, rc->shader, rc->uniforms);
     } else {
       vec3 col = debug_color(t);
       draw_triangle(rc->fb, s[0], s[1], s[2], col, col, col);

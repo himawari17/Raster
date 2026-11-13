@@ -14,6 +14,8 @@ static Varyings interpolate(const Varyings v[3], float b0, float b1, float b2) {
                      scale3(v[2].normals, b2));
   out.color = add3(add3(scale3(v[0].color, b0), scale3(v[1].color, b1)),
                    scale3(v[2].color, b2));
+  out.uv = add2(add2(scale2(v[0].uv, b0), scale2(v[1].uv, b1)),
+                scale2(v[2].uv, b2));
   return out;
 }
 
@@ -35,10 +37,11 @@ void draw_triangle(FrameBuffer* fb, vec3 p0, vec3 p1, vec3 p2,
   v[0].color = c0;
   v[1].color = c1;
   v[2].color = c2;
-  draw_triangle_shaded(fb, p0, p1, p2, v, fs_vertex_color, NULL);
+  const float iw[3] = {1.0f, 1.0f, 1.0f};
+  draw_triangle_shaded(fb, p0, p1, p2, iw, v, fs_vertex_color, NULL);
 }
 void draw_triangle_shaded(FrameBuffer* fb, vec3 p0, vec3 p1, vec3 p2,
-                          const Varyings v[3],
+                          const float iw[3], const Varyings v[3],
                           FragShader shader, const void* uniforms) {
   float S = edge(p0, p1, make2(p2.x, p2.y));
   if (fabsf(S) < 1e-8f)
@@ -64,6 +67,7 @@ void draw_triangle_shaded(FrameBuffer* fb, vec3 p0, vec3 p1, vec3 p2,
       if (b0 < 0.0f || b1 < 0.0f || b2 < 0.0f)
         continue;
 
+      /* depth test */
       float z = b0 * p0.z + b1 * p1.z + b2 * p2.z;
       int idx = y * fb->w + x;
       if (z >= fb->z[idx]) {
@@ -71,7 +75,13 @@ void draw_triangle_shaded(FrameBuffer* fb, vec3 p0, vec3 p1, vec3 p2,
       }
       fb->z[idx] = z;
 
-      Varyings in = interpolate(v, b0, b1, b2);
+      /* perspective correction */
+      float q0 = b0 * iw[0];
+      float q1 = b1 * iw[1];
+      float q2 = b2 * iw[2];
+      float s = 1.0f / (q0 + q1 + q2);
+
+      Varyings in = interpolate(v, q0 * s, q1 * s, q2 * s);
       vec3 color = shader(&in, uniforms);
       FB_DrawPixel(fb, x, y, color);
     }

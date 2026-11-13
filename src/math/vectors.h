@@ -81,6 +81,10 @@ static inline vec3 add3(vec3 a, vec3 b) {
   return make3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
 
+static inline vec2 scale2(vec2 a, float c) {
+  return make2(a.x * c, a.y * c);
+}
+
 static inline float cross2(vec2 a, vec2 b) {
   return a.x * b.y - a.y * b.x;
 }

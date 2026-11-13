@@ -38,6 +38,7 @@ add_library(raster_utils STATIC
 	src/render/context.c
 	src/math/mat.c
 	src/render/shader.c
+	src/render/texture.c
 )
 target_include_directories(raster_utils PUBLIC src ${CMAKE_CURRENT_SOURCE_DIR})
 if(NOT MSVC)

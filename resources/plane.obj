@@ -1,0 +1,11 @@
+# floor quad 2x2 with uv in [0,4] (texture repeats 4 times)
+v -1 0 -1
+v  1 0 -1
+v  1 0  1
+v -1 0  1
+vt 0 4
+vt 4 4
+vt 4 0
+vt 0 0
+vn 0 1 0
+f 4/4/1 3/3/1 2/2/1 1/1/1

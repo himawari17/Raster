@@ -1,6 +1,3 @@
-// Пример работы с утилитами шаблона без окна:
-// загружает меш, печатает его размеры, загружает текстуру и сохраняет её
-// с переставленными местами красным и синим каналами.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +22,7 @@ static int report(int ok, const char* name) {
     fprintf(stderr, "failed to save %s\n", name);
   return ok;
 }
+
 int main(int argc, char** argv) {
 
   const int W = 800, H = 600;
@@ -41,7 +39,7 @@ int main(int argc, char** argv) {
   FB_Clear(&fb, make3(0.0f, 0.0f, 0.0f));
   draw_triangle(&fb, make3(100, 100, 0), make3(300, 500, 0), make3(500, 100, 0),
                 red, green, blue);
-  ok &= report(FB_SavePng(&fb, "triangle.png", 1.0f), "triangle.png");
+  ok &= report(FB_SavePng(&fb, "results/triangle.png", 1.0f), "triangle.png");
 
   /* task 2-5 */
   mesh mesh = load_obj(mesh_path);
@@ -64,7 +62,9 @@ int main(int argc, char** argv) {
   const float far = 10.0f;
   const vec3 up = make3(0.0f, 1.0f, 0.0f);
   /* look from eye to target*/
-  const vec3 camera_position = make3(0.0f, 0.3f, 1.0f);
+  /*                                                 */
+  const vec3 camera_position = make3(0.0f, 0.0f, 1.0f);
+
   /*         					letf/right  up    down*/
   const vec3 camera_rotation = make3(0.0f, 0.0f, 0.0f);
   /* Camera view */
@@ -77,8 +77,8 @@ int main(int argc, char** argv) {
   mat4 proj = perspective(fov, (float)W / (float)H, near, far);
 
   const vec3 model_position = make3(0.0f, 0.0f, 0.0f);
-  const float model_horizontal_angle = 0.0f; // yaw
-  const float model_vertical_angle = 0.0f;   // pitch
+  const float model_horizontal_angle = 30.0f; // yaw
+  const float model_vertical_angle = 0.0f;    // pitch
 
   const mat4 rotation = mat4_mul(mat4_rotate_x(deg2rad(model_vertical_angle)),
                                  mat4_rotate_y(deg2rad(model_horizontal_angle)));
@@ -92,22 +92,38 @@ int main(int argc, char** argv) {
   render(&context, &mesh, model, NULL, NULL);
 
   /* Task 2 */
-  ok &= report(FB_SavePng(&fb, "projection.png", 1.0f), "projection.png");
+  ok &= report(FB_SavePng(&fb, "results/projection.png", 1.0f), "projection.png");
 
   /* Task 3 */
-  ok &= report(FB_SaveDepth(&fb, "depth.png", far, near), "depth.png");
+  ok &= report(FB_SaveDepth(&fb, "results/depth.png", far, near), "depth.png");
 
   /* Task 4 Normals*/
   render(&context, &mesh, model, fs_normals, NULL);
-  ok &= report(FB_SavePng(&fb, "normals.png", 1.0f), "normals.png");
+  ok &= report(FB_SavePng(&fb, "results/normals.png", 1.0f), "normals.png");
 
   LambertUniforms lambert = lambert_uniforms(make3(-1.0f, -2.0f, -2.0f), /* sun */
                                              make3(1.0f, 1.0f, 1.0f),    /* albedo */
-                                             0.1f, 0.9f);                /* ka, kd */
+                                             0.1f, 0.9f, NULL);          /* ka, kd */
 
   /* Task 4 Lambert */
   render(&context, &mesh, model, fs_lambert, &lambert);
-  ok &= report(FB_SavePng(&fb, "lambert.png", 2.2f), "lambert.png");
+  ok &= report(FB_SavePng(&fb, "results/lambert.png", 2.2f), "lambert.png");
+
+  /* Task 5 Textures */
+  const char* tex_path = argc > 2 ? argv[2] : "resources/textures/porcelain.jpg";
+  Texture* tex = mesh.tcs ? TextureLoad(tex_path, 2.2f) : NULL;
+  if (!tex)
+    printf("no texture (no uv in mesh or failed to load %s) -> solid color\n", tex_path);
+
+  render(&context, &mesh, model, fs_uv, NULL);
+  ok &= report(FB_SavePng(&fb, "results/uv.png", 1.0f), "uv.png");
+  LambertUniforms texurelambert = lambert_uniforms(make3(-1.0f, -2.0f, -2.0f), /* sun */
+                                                   make3(1.0f, 1.0f, 1.0f),    /* albedo */
+                                                   0.1f, 0.9f, tex);           /* ka, kd, tex*/
+  render(&context, &mesh, model, fs_lambert_tex, &texurelambert);
+  ok &= report(FB_SavePng(&fb, "results/textured.png", 2.2f), "textured.png");
+
+  FreeTexture(tex);
 
   ContextFree(&context);
   FB_Free(&fb);
